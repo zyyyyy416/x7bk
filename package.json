@@ -1,0 +1,53 @@
+{
+  "name": "x7bk",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "lint": "eslint . --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "supabase db push",
+    "db:link": "supabase link --project-ref mwpxkjzaecvmfijpntck",
+    "db:setup": "echo '1. 安装 Supabase CLI: npm i -g supabase' && echo '2. 登录: supabase login' && echo '3. 关联项目: npm run db:link' && echo '4. 执行迁移: npm run db:migrate'"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^14.0.0",
+    "@opentelemetry/api": "^1.9.1",
+    "@supabase/supabase-js": "^2.45.0",
+    "@tanstack/react-query": "^5.59.0",
+    "ajv": "^8.20.0",
+    "dayjs": "^1.11.13",
+    "expo": "~52.0.0",
+    "expo-constants": "~17.0.0",
+    "expo-linear-gradient": "~14.0.2",
+    "expo-linking": "~7.0.0",
+    "expo-router": "~4.0.0",
+    "expo-secure-store": "~14.0.0",
+    "expo-status-bar": "~2.0.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-native": "0.76.3",
+    "react-native-gesture-handler": "~2.20.2",
+    "react-native-gifted-charts": "^1.4.77",
+    "react-native-paper": "^5.12.5",
+    "react-native-reanimated": "~3.16.1",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.1.0",
+    "react-native-svg": "~15.8.0",
+    "react-native-web": "~0.19.13",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "~18.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "babel-plugin-module-resolver": "^5.0.2",
+    "eslint": "^8.57.0",
+    "eslint-config-expo": "~8.0.0",
+    "typescript": "~5.3.3"
+  },
+  "private": true
+}

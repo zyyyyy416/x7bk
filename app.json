@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "小7记账",
+    "slug": "x7bk",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "x7bk",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#00B894"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.x7bk.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#00B894"
+      },
+      "package": "com.x7bk.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "supabaseUrl": "https://your-project-id.supabase.co",
+      "supabaseAnonKey": "your-anon-key-here",
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "a6bac4ea-cd39-4528-960c-a1d057c4d189"
+      }
+    },
+    "owner": "zyyyyy416s-team"
+  }
+}

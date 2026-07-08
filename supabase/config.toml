@@ -1,0 +1,14 @@
+# Supabase CLI 配置 — 小7记账 (X7BK)
+# 文档: https://supabase.com/docs/guides/local-development
+
+[db]
+# 数据库迁移相关
+# 使用 `supabase db push` 将本地迁移应用到远程数据库
+# 使用 `supabase db pull` 拉取远程数据库的 schema 变更
+
+# 注意：以下配置仅用于 supabase link 后的参考
+# 实际推送时使用 supabase db push 命令
+
+[api]
+# 远程项目 API 配置
+# 通过 supabase link --project-ref <project-ref> 关联项目
