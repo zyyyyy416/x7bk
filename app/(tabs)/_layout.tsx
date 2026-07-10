@@ -43,7 +43,7 @@ export default function TabLayout() {
           title: '记账',
           tabBarIcon: ({ color }) => (
             <View style={styles.addButton}>
-              <MaterialCommunityIcons name="plus" size={26} color="#FFFFFF" />
+              <MaterialCommunityIcons name="plus" size={22} color="#FFFFFF" />
             </View>
           ),
           tabBarLabel: '记账',
@@ -80,22 +80,22 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderTopColor: Colors.divider,
     borderTopWidth: 1,
-    height: 60,
+    height: 70,
     paddingBottom: 8,
     paddingTop: 4,
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '500',
   },
   addButton: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.full,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -4,
+    marginTop: -16,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,

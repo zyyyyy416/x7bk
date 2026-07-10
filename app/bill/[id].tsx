@@ -18,6 +18,7 @@ import { formatCurrency } from '@/utils/currency';
 import { formatDateFull, formatRelativeTime } from '@/utils/date';
 import { useUpdateBill, useDeleteBill } from '@/hooks/useBills';
 import { getBillById } from '@/services/bill.service';
+import DatePickerModal from '@/components/ui/DatePickerModal';
 import CategoryItem from '@/components/ui/CategoryItem';
 import type { BillWithDetails } from '@/types';
 
@@ -44,6 +45,7 @@ export default function BillDetailScreen() {
   const [editAmount, setEditAmount] = useState('');
   const [editNote, setEditNote] = useState('');
   const [editDate, setEditDate] = useState('');
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [snackbar, setSnackbar] = useState('');
 
@@ -141,13 +143,14 @@ export default function BillDetailScreen() {
                 mode="outlined"
                 style={styles.editInput}
               />
-              <TextInput
-                label="日期"
-                value={editDate}
-                onChangeText={setEditDate}
-                mode="outlined"
-                style={styles.editInput}
-                placeholder="YYYY-MM-DD"
+              <Button mode="outlined" icon="calendar" onPress={() => setDatePickerVisible(true)} style={{ marginTop: Spacing.xs }}>
+                {editDate}
+              </Button>
+              <DatePickerModal
+                visible={datePickerVisible}
+                date={editDate}
+                onSelect={(d) => { setEditDate(d); setDatePickerVisible(false); }}
+                onClose={() => setDatePickerVisible(false)}
               />
               <View style={styles.editActions}>
                 <Button mode="text" onPress={() => setIsEditing(false)}>

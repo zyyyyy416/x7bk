@@ -61,13 +61,6 @@ export default function ProfileScreen() {
             right={(props) => <List.Icon {...props} icon="chevron-right" />}
             onPress={() => {}}
           />
-          <List.Item
-            title="外观设置"
-            description="深色模式 / 字体大小（即将上线）"
-            left={(props) => <List.Icon {...props} icon="palette" color="#6C5CE7" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => {}}
-          />
         </Card.Content>
       </Card>
 
@@ -75,7 +68,7 @@ export default function ProfileScreen() {
         <Card.Content style={styles.sectionContent}>
           <List.Item
             title="关于小7记账"
-            description="v1.0.0"
+            description="v1.3.0"
             left={(props) => <List.Icon {...props} icon="information" color={Colors.textMuted} />}
             right={(props) => <List.Icon {...props} icon="chevron-right" />}
             onPress={() => {}}

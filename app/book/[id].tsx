@@ -113,13 +113,14 @@ export default function BookDetailScreen() {
 
   // 按日期分组
   const groupedBills = useMemo(() => {
-    const groups: { date: string; items: BillWithDetails[] }[] = [];
+    const groups: { date: string; items: BillWithDetails[]; total: number }[] = [];
     for (const bill of filteredBills) {
       const last = groups[groups.length - 1];
       if (last && last.date === bill.bill_date) {
         last.items.push(bill);
+        last.total += Number(bill.amount);
       } else {
-        groups.push({ date: bill.bill_date, items: [bill] });
+        groups.push({ date: bill.bill_date, items: [bill], total: Number(bill.amount) });
       }
     }
     return groups;
@@ -211,7 +212,7 @@ export default function BookDetailScreen() {
                 {/* 日期分割线 */}
                 <View style={styles.dateSeparator}>
                   <View style={styles.dateLine} />
-                  <Text style={styles.dateLabel}>{formatDate(group.date)}</Text>
+                  <Text style={styles.dateLabel}>{(() => { const d = dayjs(group.date).format('M月D日'); const w = '周' + ['日','一','二','三','四','五','六'][dayjs(group.date).day()]; return `${d} ${w} · ${formatCurrency(group.total)}`; })()}</Text>
                   <View style={styles.dateLine} />
                 </View>
                 <Card style={styles.billListCard} mode="elevated">

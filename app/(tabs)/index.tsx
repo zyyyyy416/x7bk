@@ -159,7 +159,6 @@ export default function HomeScreen() {
               <MaterialCommunityIcons name="chevron-down" size={14} color={Colors.primary} />
             </Pressable>
           </View>
-          <MaterialCommunityIcons name="bell-outline" size={24} color={Colors.textSecondary} />
         </View>
       </Surface>
 
