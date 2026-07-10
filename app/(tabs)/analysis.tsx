@@ -41,8 +41,8 @@ export default function AnalysisScreen() {
   const { data: books } = useBooks();
   const setActiveBook = useUiStore((s) => s.setActiveBook);
 
-  const [timePeriod, setTimePeriod] = useState<string>('month');
-  const timelineInitial = useMemo(() => getTimelineOptions('month'), []);
+  const [timePeriod, setTimePeriod] = useState<string>('week');
+  const timelineInitial = useMemo(() => getTimelineOptions('week'), []);
   const [timeIndex, setTimeIndex] = useState(timelineInitial.length - 1);
   const [bookFilter, setBookFilter] = useState<string>('__all__');
   const [bookPickerVisible, setBookPickerVisible] = useState(false);

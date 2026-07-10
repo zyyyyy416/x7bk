@@ -32,6 +32,12 @@ export function useUpdateBill() {
       updateBill(id, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bills'] });
+      queryClient.invalidateQueries({ queryKey: ['dailyTrend'] });
+      queryClient.invalidateQueries({ queryKey: ['yearlyTrend'] });
+      queryClient.invalidateQueries({ queryKey: ['categoryBreakdown'] });
+      queryClient.invalidateQueries({ queryKey: ['allBooksCategoryBreakdown'] });
+      queryClient.invalidateQueries({ queryKey: ['monthlySummary'] });
+      queryClient.invalidateQueries({ queryKey: ['allBooksSummary'] });
     },
   });
 }
@@ -44,6 +50,12 @@ export function useDeleteBill() {
     mutationFn: deleteBill,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bills'] });
+      queryClient.invalidateQueries({ queryKey: ['dailyTrend'] });
+      queryClient.invalidateQueries({ queryKey: ['yearlyTrend'] });
+      queryClient.invalidateQueries({ queryKey: ['categoryBreakdown'] });
+      queryClient.invalidateQueries({ queryKey: ['allBooksCategoryBreakdown'] });
+      queryClient.invalidateQueries({ queryKey: ['monthlySummary'] });
+      queryClient.invalidateQueries({ queryKey: ['allBooksSummary'] });
     },
   });
 }

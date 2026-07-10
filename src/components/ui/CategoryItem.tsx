@@ -28,40 +28,27 @@ interface CategoryItemProps {
 /** 将常量 icon 名映射到 MaterialCommunityIcons */
 export function mapIcon(icon: string): IconName {
   const map: Record<string, string> = {
-    'food': 'food',
-    'car': 'car',
-    'home': 'home',
-    'shopping': 'shopping',
-    'gamepad-variant': 'gamepad-variant',
-    'hospital': 'hospital',
-    'school': 'school',
-    'account-group': 'account-group',
-    'bank': 'bank',
-    'dots-horizontal': 'dots-horizontal',
-    'briefcase': 'briefcase',
-    'chart-line': 'chart-line',
-    'gift': 'gift',
+    'food': 'food', 'car': 'car', 'home': 'home', 'shopping': 'shopping',
+    'gamepad-variant': 'gamepad-variant', 'hospital': 'hospital', 'school': 'school',
+    'account-group': 'account-group', 'bank': 'bank', 'dots-horizontal': 'dots-horizontal',
+    'briefcase': 'briefcase', 'chart-line': 'chart-line', 'gift': 'gift',
+    'cash-plus': 'cash-plus', 'transport': 'car', 'entertain': 'gamepad-variant',
+    'health': 'hospital', 'education': 'school', 'social': 'account-group',
+    'finance': 'bank', 'other': 'dots-horizontal', 'housing': 'home',
     'help-circle': 'help-circle',
   };
   return (map[icon] ?? 'help-circle') as IconName;
 }
 
-/** 一级分类配色 */
 export function getCategoryColor(icon: string): string {
   const colorMap: Record<string, string> = {
-    'food': '#FF6B6B',
-    'car': '#74B9FF',
-    'home': '#A29BFE',
-    'shopping': '#FD79A8',
-    'gamepad-variant': '#FDCB6E',
-    'hospital': '#E17055',
-    'school': '#00CEC9',
-    'account-group': '#FF7675',
-    'bank': '#636E72',
-    'dots-horizontal': '#B2BEC3',
-    'briefcase': '#00B894',
-    'chart-line': '#6C5CE7',
-    'gift': '#E056A0',
+    'food': '#FF6B6B', 'car': '#74B9FF', 'home': '#A29BFE', 'shopping': '#FD79A8',
+    'gamepad-variant': '#FDCB6E', 'hospital': '#E17055', 'school': '#00CEC9',
+    'account-group': '#FF7675', 'bank': '#636E72', 'dots-horizontal': '#B2BEC3',
+    'briefcase': '#00B894', 'chart-line': '#6C5CE7', 'gift': '#E056A0',
+    'cash-plus': '#00B894', 'transport': '#74B9FF', 'entertain': '#FDCB6E',
+    'health': '#E17055', 'education': '#00CEC9', 'social': '#FF7675',
+    'finance': '#636E72', 'other': '#B2BEC3', 'housing': '#A29BFE',
   };
   return colorMap[icon] ?? Colors.textMuted;
 }

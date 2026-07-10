@@ -217,7 +217,7 @@ export default function AddBillScreen() {
       {/* ═══ 金额输入区 ═══ */}
       <View style={styles.amountArea}>
         {/* 无账本提示 */}
-        {!booksLoading && !activeBook && (
+        {!booksLoading && (books ?? []).length === 0 && (
           <View style={styles.noBookBanner}>
             <MaterialCommunityIcons name="notebook-plus" size={32} color={Colors.warning} />
             <Text style={styles.noBookText}>还没有账本，先创建一个吧</Text>
