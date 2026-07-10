@@ -26,7 +26,7 @@ interface CategoryItemProps {
 }
 
 /** 将常量 icon 名映射到 MaterialCommunityIcons */
-function mapIcon(icon: string): IconName {
+export function mapIcon(icon: string): IconName {
   const map: Record<string, string> = {
     'food': 'food',
     'car': 'car',
@@ -47,7 +47,7 @@ function mapIcon(icon: string): IconName {
 }
 
 /** 一级分类配色 */
-function getCategoryColor(icon: string): string {
+export function getCategoryColor(icon: string): string {
   const colorMap: Record<string, string> = {
     'food': '#FF6B6B',
     'car': '#74B9FF',

@@ -43,6 +43,7 @@ export default function BillDetailScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [editAmount, setEditAmount] = useState('');
   const [editNote, setEditNote] = useState('');
+  const [editDate, setEditDate] = useState('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [snackbar, setSnackbar] = useState('');
 
@@ -54,6 +55,7 @@ export default function BillDetailScreen() {
     if (!bill) return;
     setEditAmount(String(bill.amount));
     setEditNote(bill.note ?? '');
+    setEditDate(bill.bill_date ?? '');
     setIsEditing(true);
   }, [bill]);
 
@@ -69,7 +71,7 @@ export default function BillDetailScreen() {
     try {
       await updateBill.mutateAsync({
         id: bill.id,
-        updates: { amount: newAmount, note: editNote || null },
+        updates: { amount: newAmount, note: editNote || null, bill_date: editDate || bill.bill_date },
       });
       setSnackbar('已更新');
       setIsEditing(false);
@@ -138,6 +140,14 @@ export default function BillDetailScreen() {
                 onChangeText={setEditNote}
                 mode="outlined"
                 style={styles.editInput}
+              />
+              <TextInput
+                label="日期"
+                value={editDate}
+                onChangeText={setEditDate}
+                mode="outlined"
+                style={styles.editInput}
+                placeholder="YYYY-MM-DD"
               />
               <View style={styles.editActions}>
                 <Button mode="text" onPress={() => setIsEditing(false)}>

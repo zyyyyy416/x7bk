@@ -1,36 +1,38 @@
-import { useMemo, useEffect, useState } from 'react';
+import { useMemo, useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Pressable, RefreshControl, Alert } from 'react-native';
-import { Text, Card, FAB, ActivityIndicator, Dialog, Portal, Button, TextInput, Snackbar, Avatar, IconButton, Divider } from 'react-native-paper';
+import { Text, Card, FAB, ActivityIndicator, Dialog, Portal, Button, TextInput, Snackbar, Avatar, IconButton, Divider, Searchbar } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams, Stack } from 'expo-router';
+import dayjs from 'dayjs';
 import { Colors, Spacing, FontSize, BorderRadius } from '@/theme';
 import { formatCurrency, formatAmount } from '@/utils/currency';
-import { formatRelativeTime } from '@/utils/date';
-import { CATEGORY_ICON_MAP } from '@/constants/categories';
+import { formatDate, formatRelativeTime } from '@/utils/date';
 import { useBills } from '@/hooks/useBills';
-import { useBooks, useBookMembers, useRemoveMember, useLeaveBook } from '@/hooks/useBooks';
+import { useBooks, useBookMembers, useRemoveMember, useLeaveBook, useDeleteBook } from '@/hooks/useBooks';
 import { useUiStore } from '@/stores/uiStore';
 import { useAuthStore } from '@/stores/authStore';
-import type { BillWithDetails, Book, BookMember } from '@/types';
+import { mapIcon, getCategoryColor } from '@/components/ui/CategoryItem';
+import type { BillWithDetails, Book } from '@/types';
 
 // ─── 单条账单行 ────────────────────────────────────────
 function BillRow({ bill }: { bill: BillWithDetails }) {
   const iconKey = bill.category?.icon ?? 'help-circle';
-  const iconName = (CATEGORY_ICON_MAP[iconKey] ?? 'help-circle') as keyof typeof MaterialCommunityIcons.glyphMap;
+  const iconName = mapIcon(iconKey);
+  const catColor = getCategoryColor(iconKey);
   const isExpense = bill.type === 'expense';
   const amount = Number(bill.amount);
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.billRow, pressed && styles.billRowPressed]}
+      style={({ pressed }) => [
+        styles.billRow,
+        { backgroundColor: catColor + '10' },
+        pressed && styles.billRowPressed,
+      ]}
       onPress={() => router.push({ pathname: '/bill/[id]', params: { id: bill.id } } as any)}
     >
-      <View style={[styles.billIconWrap, { backgroundColor: (isExpense ? Colors.expense : Colors.income) + '15' }]}>
-        <MaterialCommunityIcons
-          name={iconName}
-          size={20}
-          color={isExpense ? Colors.expense : Colors.income}
-        />
+      <View style={[styles.billIconWrap, { backgroundColor: catColor + '22' }]}>
+        <MaterialCommunityIcons name={iconName} size={20} color={catColor} />
       </View>
 
       <View style={styles.billInfo}>
@@ -48,7 +50,7 @@ function BillRow({ bill }: { bill: BillWithDetails }) {
         <Text style={styles.billTime}>{formatRelativeTime(bill.created_at)}</Text>
       </View>
 
-      <Text style={[styles.billAmount, isExpense ? styles.billExpense : styles.billIncome]}>
+      <Text style={[styles.billAmount, { color: isExpense ? Colors.expense : Colors.income }]}>
         {isExpense ? '-' : '+'}{formatAmount(amount)}
       </Text>
     </Pressable>
@@ -64,8 +66,10 @@ export default function BookDetailScreen() {
   const userId = useAuthStore((s) => s.user?.id);
   const removeMember = useRemoveMember();
   const leaveBook = useLeaveBook();
+  const deleteBook = useDeleteBook();
 
   const [inviteVisible, setInviteVisible] = useState(false);
+  const [memberVisible, setMemberVisible] = useState(false);
   const [snackbar, setSnackbar] = useState('');
 
   // 找到当前账本
@@ -95,6 +99,32 @@ export default function BookDetailScreen() {
 
   const bills = billsData?.bills ?? [];
 
+  // 搜索
+  const [searchQuery, setSearchQuery] = useState('');
+  const filteredBills = useMemo(() => {
+    if (!searchQuery.trim()) return bills;
+    const q = searchQuery.trim().toLowerCase();
+    return bills.filter((b: BillWithDetails) =>
+      (b.note ?? '').toLowerCase().includes(q) ||
+      (b.category?.name ?? '').toLowerCase().includes(q) ||
+      String(b.amount).includes(q)
+    );
+  }, [bills, searchQuery]);
+
+  // 按日期分组
+  const groupedBills = useMemo(() => {
+    const groups: { date: string; items: BillWithDetails[] }[] = [];
+    for (const bill of filteredBills) {
+      const last = groups[groups.length - 1];
+      if (last && last.date === bill.bill_date) {
+        last.items.push(bill);
+      } else {
+        groups.push({ date: bill.bill_date, items: [bill] });
+      }
+    }
+    return groups;
+  }, [filteredBills]);
+
   // 邀请码
   const handleCopyInvite = () => {
     setSnackbar('邀请码已复制: ' + id);
@@ -119,9 +149,31 @@ export default function BookDetailScreen() {
     ]);
   };
 
+  // 删除账本
+  const handleDeleteBook = () => {
+    Alert.alert('删除账本', '确定要删除该账本吗？所有账单将被永久删除，此操作不可撤销。', [
+      { text: '取消', style: 'cancel' },
+      { text: '删除', style: 'destructive', onPress: () => {
+        deleteBook.mutate(id!, { onSuccess: () => router.back() });
+      }},
+    ]);
+  };
+
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: book?.name ?? '账本详情' }} />
+      <Stack.Screen options={{
+        title: book?.name ?? '账本详情',
+        headerRight: () => (
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {book?.type === 'shared' && (
+              <IconButton icon="cog" size={22} onPress={() => setMemberVisible(true)} />
+            )}
+            {book?.creator_id === userId && (
+              <IconButton icon="delete" size={22} iconColor={Colors.expense} onPress={handleDeleteBook} />
+            )}
+          </View>
+        ),
+      }} />
 
       <ScrollView
         style={styles.scrollView}
@@ -135,104 +187,51 @@ export default function BookDetailScreen() {
           />
         }
       >
-        {/* 账本信息卡片 */}
-        {book && (
-          <Card style={styles.infoCard} mode="elevated">
-            <Card.Content style={styles.infoContent}>
-              <View style={styles.infoLeft}>
-                <MaterialCommunityIcons
-                  name={book.type === 'personal' ? 'notebook' : 'account-group'}
-                  size={32}
-                  color={Colors.primary}
-                />
-                <View>
-                  <Text style={styles.bookName}>{book.name}</Text>
-                  <Text style={styles.bookType}>
-                    {book.type === 'personal' ? '个人账本' : '共享账本'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.billCount}>{bills.length} 笔记录</Text>
-            </Card.Content>
-          </Card>
-        )}
-
-        {/* 共享账本: 成员 & 邀请 */}
-        {book && book.type === 'shared' && (
-          <Card style={styles.memberCard} mode="elevated">
-            <Card.Content>
-              <View style={styles.memberHeader}>
-                <Text style={styles.memberTitle}>
-                  成员 ({(members ?? []).length})
-                </Text>
-                {isAdmin && (
-                  <Button mode="text" icon="plus" onPress={() => setInviteVisible(true)} compact>
-                    邀请
-                  </Button>
-                )}
-              </View>
-              {(members ?? []).map((m: any) => (
-                <View key={m.id} style={styles.memberRow}>
-                  <Avatar.Text
-                    size={36}
-                    label={(m.user?.nickname ?? '?')[0]}
-                    style={{ backgroundColor: Colors.primary }}
-                  />
-                  <View style={styles.memberInfo}>
-                    <Text style={styles.memberName}>
-                      {m.user?.nickname ?? '用户'} {m.user_id === book.creator_id ? '(管理员)' : ''}
-                    </Text>
-                    <Text style={styles.memberRole}>{m.role === 'admin' ? '管理员' : '成员'}</Text>
-                  </View>
-                  {isAdmin && m.user_id !== userId && (
-                    <IconButton
-                      icon="close"
-                      size={18}
-                      onPress={() => handleRemoveMember(m.user_id, m.user?.nickname ?? '用户')}
-                    />
-                  )}
-                </View>
-              ))}
-              {!isAdmin && (
-                <>
-                  <Divider style={{ marginVertical: Spacing.sm }} />
-                  <Button mode="text" textColor={Colors.expense} onPress={handleLeave} icon="exit-to-app">
-                    退出账本
-                  </Button>
-                </>
-              )}
-            </Card.Content>
-          </Card>
-        )}
+        {/* 搜索 */}
+        <View style={styles.searchWrap}>
+          <Searchbar
+            placeholder="搜索备注、分类、金额..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            style={styles.searchBar}
+            inputStyle={styles.searchInput}
+          />
+        </View>
 
         {/* 账单列表 */}
         <View style={styles.billSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>全部账单</Text>
-          </View>
-
           {isLoading ? (
             <View style={styles.loadingWrap}>
               <ActivityIndicator color={Colors.primary} />
               <Text style={styles.loadingText}>加载中...</Text>
             </View>
-          ) : bills.length > 0 ? (
-            <Card style={styles.billListCard} mode="elevated">
-              <Card.Content style={styles.billListContent}>
-                {bills.map((bill: BillWithDetails, idx: number) => (
-                  <View key={bill.id}>
-                    <BillRow bill={bill} />
-                    {idx < bills.length - 1 && <View style={styles.billDivider} />}
-                  </View>
-                ))}
-              </Card.Content>
-            </Card>
+          ) : groupedBills.length > 0 ? (
+            groupedBills.map((group) => (
+              <View key={group.date}>
+                {/* 日期分割线 */}
+                <View style={styles.dateSeparator}>
+                  <View style={styles.dateLine} />
+                  <Text style={styles.dateLabel}>{formatDate(group.date)}</Text>
+                  <View style={styles.dateLine} />
+                </View>
+                <Card style={styles.billListCard} mode="elevated">
+                  <Card.Content style={styles.billListContent}>
+                    {group.items.map((bill: BillWithDetails, idx: number) => (
+                      <View key={bill.id}>
+                        <BillRow bill={bill} />
+                        {idx < group.items.length - 1 && <View style={styles.billDivider} />}
+                      </View>
+                    ))}
+                  </Card.Content>
+                </Card>
+              </View>
+            ))
           ) : (
             <Card style={styles.emptyCard} mode="outlined">
               <Card.Content style={styles.emptyContent}>
                 <MaterialCommunityIcons name="notebook-plus-outline" size={48} color={Colors.textMuted} />
-                <Text style={styles.emptyText}>还没有记账记录</Text>
-                <Text style={styles.emptyHint}>点击下方按钮开始记账</Text>
+                <Text style={styles.emptyText}>{searchQuery ? '未找到匹配记录' : '还没有记账记录'}</Text>
+                <Text style={styles.emptyHint}>{searchQuery ? '尝试其他关键词' : '点击下方按钮开始记账'}</Text>
               </Card.Content>
             </Card>
           )}
@@ -249,6 +248,32 @@ export default function BookDetailScreen() {
         onPress={() => router.push('/add')}
         color="#FFFFFF"
       />
+
+      {/* 成员管理对话框 */}
+      <Portal>
+        <Dialog visible={memberVisible} onDismiss={() => setMemberVisible(false)}>
+          <Dialog.Title>成员管理 ({(members ?? []).length})</Dialog.Title>
+          <Dialog.Content>
+            {(members ?? []).map((m: any) => (
+              <View key={m.id} style={styles.memberRow}>
+                <Avatar.Text size={36} label={(m.user?.nickname ?? '?')[0]} style={{ backgroundColor: Colors.primary }} />
+                <View style={styles.memberInfo}>
+                  <Text style={styles.memberName}>{m.user?.nickname ?? '用户'} {m.user_id === book?.creator_id ? '(管理员)' : ''}</Text>
+                  <Text style={styles.memberRole}>{m.role === 'admin' ? '管理员' : '成员'}</Text>
+                </View>
+                {isAdmin && m.user_id !== userId && (
+                  <IconButton icon="close" size={18} onPress={() => handleRemoveMember(m.user_id, m.user?.nickname ?? '用户')} />
+                )}
+              </View>
+            ))}
+          </Dialog.Content>
+          <Dialog.Actions>
+            {isAdmin && <Button onPress={() => { setMemberVisible(false); setTimeout(() => setInviteVisible(true), 300); }}>邀请</Button>}
+            {!isAdmin && <Button textColor={Colors.expense} onPress={() => { setMemberVisible(false); handleLeave(); }}>退出账本</Button>}
+            <Button onPress={() => setMemberVisible(false)}>关闭</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
       {/* 邀请对话框 */}
       <Portal>
@@ -291,11 +316,19 @@ const styles = StyleSheet.create({
   bookName: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
   bookType: { fontSize: FontSize.sm, color: Colors.textMuted, marginTop: 2 },
   billCount: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: '500' },
+  // 搜索
+  searchWrap: { paddingHorizontal: Spacing.md, marginBottom: Spacing.md },
+  searchBar: { backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, elevation: 0 },
+  searchInput: { fontSize: FontSize.md, minHeight: 0 },
+  // 日期分割线
+  dateSeparator: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md, marginBottom: Spacing.sm, marginTop: Spacing.sm },
+  dateLine: { flex: 1, height: 1, backgroundColor: Colors.divider },
+  dateLabel: { fontSize: FontSize.xs, color: Colors.textMuted, marginHorizontal: Spacing.md, fontWeight: '500' },
   // 账单
-  billSection: { paddingHorizontal: Spacing.md, marginBottom: Spacing.md },
+  billSection: { marginBottom: Spacing.md },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
   sectionTitle: { fontSize: FontSize.md, fontWeight: '600', color: Colors.text },
-  billListCard: { borderRadius: BorderRadius.lg },
+  billListCard: { marginHorizontal: Spacing.md, borderRadius: BorderRadius.lg },
   billListContent: { paddingVertical: Spacing.xs, paddingHorizontal: Spacing.xs },
   billRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.sm, paddingHorizontal: Spacing.sm, gap: Spacing.md, borderRadius: BorderRadius.md },
   billRowPressed: { backgroundColor: Colors.divider + '80' },

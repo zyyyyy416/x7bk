@@ -189,3 +189,11 @@ export async function removeMember(bookId: string, userId: string) {
 export async function leaveBook(bookId: string, userId: string) {
   return removeMember(bookId, userId);
 }
+
+/** 删除账本 (仅创建者) */
+export async function deleteBook(bookId: string, userId: string) {
+  const s = await getSupabase();
+  if (!s) throw new Error('Supabase 未配置');
+  const { error } = await s.from('books').delete().eq('id', bookId).eq('creator_id', userId);
+  if (error) throw new Error(error.message);
+}

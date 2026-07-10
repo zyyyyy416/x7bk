@@ -1,416 +1,302 @@
-import { useState, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, Pressable } from 'react-native';
-import { Text, Card, Chip, ActivityIndicator, Dialog, Portal, Button, List } from 'react-native-paper';
+import { useState, useMemo, useRef, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, Pressable, Dimensions } from 'react-native';
+import { Text, Card, Chip, ActivityIndicator, Dialog, Portal, Button, List, IconButton, SegmentedButtons } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { PieChart, LineChart, BarChart } from 'react-native-gifted-charts';
+import { LineChart } from 'react-native-gifted-charts';
 import { Colors, Spacing, FontSize, BorderRadius } from '@/theme';
 import { formatCurrency } from '@/utils/currency';
-import { getCurrentMonth } from '@/utils/date';
+import dayjs from 'dayjs';
 import { useBooks } from '@/hooks/useBooks';
-import { useMonthlySummary, useAllBooksSummary, useCategoryBreakdown, useAllBooksCategoryBreakdown, useSubCategoryBreakdown, useMonthlyTrend, useEngelTrend, useComparison } from '@/hooks/useAnalysis';
+import { useMonthlySummary, useAllBooksSummary, useCategoryBreakdown, useAllBooksCategoryBreakdown, useSubCategoryBreakdown, useEngelTrend, useDailyTrend, useYearlyTrend } from '@/hooks/useAnalysis';
 import { useUiStore } from '@/stores/uiStore';
+import { mapIcon, getCategoryColor } from '@/components/ui/CategoryItem';
 import DatePickerModal from '@/components/ui/DatePickerModal';
 import type { Book } from '@/types';
 
-// 自定义色系
-const CHART_COLORS = [
-  '#C5D9F2', '#7CA4D6', '#F2A8B6', '#A6D9B6', '#FCE0A6',
-  '#E6F0FA', '#FDECF0', '#EBF7F2', '#FFF8EB', '#A83232',
-];
-
-const TIME_FILTERS = ['本周', '本月', '近3月', '本年', '自定义'];
+function getTimelineOptions(period: string) {
+  const now = dayjs();
+  if (period === 'week') {
+    return Array.from({ length: 4 }, (_, i) => {
+      const start = now.subtract(i, 'week').startOf('week');
+      const end = start.endOf('week');
+      return { label: `${start.format('M/D')}-${end.format('M/D')}`, start: start.format('YYYY-MM-DD'), end: end.format('YYYY-MM-DD') };
+    }).reverse();
+  }
+  if (period === 'month') {
+    return Array.from({ length: 6 }, (_, i) => {
+      const m = now.subtract(i, 'month');
+      return { label: m.format('YYYY-MM'), start: m.startOf('month').format('YYYY-MM-DD'), end: m.endOf('month').format('YYYY-MM-DD') };
+    }).reverse();
+  }
+  if (period === 'year') {
+    return Array.from({ length: 3 }, (_, i) => {
+      const y = now.subtract(i, 'year');
+      return { label: y.format('YYYY'), start: y.startOf('year').format('YYYY-MM-DD'), end: y.endOf('year').format('YYYY-MM-DD') };
+    }).reverse();
+  }
+  return [];
+}
 
 export default function AnalysisScreen() {
   const { data: books } = useBooks();
   const setActiveBook = useUiStore((s) => s.setActiveBook);
-  const currentMonth = getCurrentMonth();
 
-  const [timeFilter, setTimeFilter] = useState('本月');
+  const [timePeriod, setTimePeriod] = useState<string>('month');
+  const timelineInitial = useMemo(() => getTimelineOptions('month'), []);
+  const [timeIndex, setTimeIndex] = useState(timelineInitial.length - 1);
   const [bookFilter, setBookFilter] = useState<string>('__all__');
   const [bookPickerVisible, setBookPickerVisible] = useState(false);
   const [customStart, setCustomStart] = useState<string | null>(null);
   const [customEnd, setCustomEnd] = useState<string | null>(null);
   const [datePickerTarget, setDatePickerTarget] = useState<'start' | 'end' | null>(null);
-  const [drillCategory, setDrillCategory] = useState<{ id: string; name: string } | null>(null);
-  const [compareMode, setCompareMode] = useState<'mom' | 'yoy'>('mom');
+  const timelineRef = useRef<ScrollView>(null);
+
+  const scrollTimelineToEnd = useCallback(() => {
+    setTimeout(() => timelineRef.current?.scrollToEnd({ animated: false }), 100);
+  }, []);
+
+  const timelineOptions = useMemo(() => getTimelineOptions(timePeriod), [timePeriod]);
+  const activeRange = timelineOptions[timeIndex] ?? { start: dayjs().startOf('month').format('YYYY-MM-DD'), end: dayjs().endOf('month').format('YYYY-MM-DD') };
+  const rangeStart = customStart ?? activeRange.start;
+  const rangeEnd = customEnd ?? activeRange.end;
 
   const showAll = bookFilter === '__all__';
   const bookIds = useMemo(() => (books ?? []).map((b: Book) => b.id), [books]);
   const selectedBook = showAll ? null : (books ?? []).find((b: Book) => b.id === bookFilter);
+  const queryBook = showAll ? '' : bookFilter;
+  const drillBookId = showAll ? (bookIds[0] ?? '') : bookFilter;
 
-  // 使用当前月份 (自定义时间范围暂只影响占位，实际查询仍用 currentMonth)
-  const { data: singleSummary, isLoading: singleLoading } = useMonthlySummary(
-    showAll ? '' : bookFilter, currentMonth,
-  );
-  const { data: allSummary, isLoading: allLoading } = useAllBooksSummary(bookIds, currentMonth);
+  // 汇总
+  const { data: singleSummary } = useMonthlySummary(queryBook, rangeStart, rangeEnd);
+  const { data: allSummary } = useAllBooksSummary(bookIds, rangeStart, rangeEnd);
   const displaySum = showAll ? allSummary : singleSummary;
 
-  const chartBookId = showAll ? '' : bookFilter;
-  const { data: categoryData } = useCategoryBreakdown(chartBookId, currentMonth);
-  const { data: allCategoryData } = useAllBooksCategoryBreakdown(bookIds, currentMonth);
+  // 分类占比 (当前)
+  const { data: categoryData } = useCategoryBreakdown(queryBook, rangeStart, rangeEnd);
+  const { data: allCategoryData } = useAllBooksCategoryBreakdown(bookIds, rangeStart, rangeEnd);
   const displayCategoryData = showAll ? allCategoryData : categoryData;
-  const { data: trendData } = useMonthlyTrend(showAll ? (bookIds[0] ?? '') : bookFilter);
-  const { data: engelData } = useEngelTrend(showAll ? (bookIds[0] ?? '') : bookFilter);
-  // 下钻 & 对比 (全部时用第一个账本)
-  const drillBookId = showAll ? (bookIds[0] ?? '') : bookFilter;
-  const { data: subData } = useSubCategoryBreakdown(drillBookId, currentMonth, drillCategory?.id ?? '');
-  const { data: comparison } = useComparison(drillBookId, currentMonth, compareMode);
+  const totalExpense = useMemo(() => (displayCategoryData ?? []).reduce((s: number, c: any) => s + Number(c.total), 0), [displayCategoryData]);
 
-  // 饼图
-  const pieData = useMemo(() => (displayCategoryData ?? []).map((c: any, i: number) => ({
-    value: Number(c.total),
-    text: c.name.length > 4 ? c.name.slice(0, 4) : c.name,
-    color: CHART_COLORS[i % CHART_COLORS.length]!,
-  })), [displayCategoryData]);
+  // 分类占比 (上一时段用于环比)
+  const prevStart = dayjs(rangeStart).subtract(1, timePeriod === 'year' ? 'year' : timePeriod === 'week' ? 'week' : 'month').format('YYYY-MM-DD');
+  const prevEnd = dayjs(rangeEnd).subtract(1, timePeriod === 'year' ? 'year' : timePeriod === 'week' ? 'week' : 'month').format('YYYY-MM-DD');
+  const prevQueryBook = showAll ? '' : bookFilter;
+  const { data: prevSingleCat } = useCategoryBreakdown(prevQueryBook, prevStart, prevEnd);
+  const { data: prevAllCat } = useAllBooksCategoryBreakdown(bookIds, prevStart, prevEnd);
+  const prevCat = showAll ? prevAllCat : prevSingleCat;
+  const prevMap = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of (prevCat ?? [])) { m.set(c.name, c.total); }
+    return m;
+  }, [prevCat]);
 
-  // 趋势
-  const lineData = useMemo(() => (trendData ?? []).map((d: any) => ({
-    value: Number(d.expense),
-    label: d.month.slice(5),
-  })), [trendData]);
+  // 支出趋势 (动态按时间范围)
+  const trendYear = parseInt(rangeStart.slice(0, 4), 10);
+  const { data: dailyTrend } = useDailyTrend(drillBookId, rangeStart, rangeEnd);
+  const { data: yearlyTrend } = useYearlyTrend(drillBookId, trendYear);
+  const { data: engelData } = useEngelTrend(drillBookId);
 
-  const engelLineData = useMemo(() => (engelData ?? []).map((d: any) => ({
-    value: Number(d.coefficient),
-    label: d.month.slice(5),
-  })), [engelData]);
+  const trendIsYear = timePeriod === 'year';
+  const screenW = Dimensions.get('window').width;
+  const chartW = screenW - 28;
+  const lineData = useMemo(() => {
+    if (trendIsYear) {
+      return (yearlyTrend ?? []).map((d: any) => ({ value: d.expense, label: d.month, dataPointText: d.expense > 0 ? String(d.expense) : '' }));
+    }
+    return (dailyTrend ?? []).map((d: any, i: number) => {
+      const day = parseInt(d.date.slice(8), 10) || parseInt(d.date.slice(5), 10);
+      const showLabel = timePeriod === 'month' ? (i === 0 || day % 5 === 0) : true;
+      return {
+        value: d.expense,
+        label: showLabel ? d.date.slice(5) : '',
+        dataPointText: d.expense > 0 ? String(d.expense) : '',
+      };
+    });
+  }, [dailyTrend, yearlyTrend, trendIsYear, timePeriod]);
+  const trendSpacing = Math.max((chartW - 30) / Math.max(lineData.length, 1) - 2, 8);
 
-  // 下钻饼图数据
-  const subPieData = useMemo(() => (subData ?? []).map((c: any, i: number) => ({
-    value: Number(c.total),
-    text: c.name.length > 4 ? c.name.slice(0, 4) : c.name,
-    color: CHART_COLORS[i % CHART_COLORS.length]!,
-  })), [subData]);
-
-  // 对比柱状图
-  const barData = useMemo(() => {
-    if (!comparison) return [];
-    return [
-      { value: comparison.current.expense, label: '本月支出', frontColor: Colors.expense },
-      { value: comparison.compare.expense, label: comparison.compareLabel + '支出', frontColor: Colors.textMuted },
-      { value: comparison.current.income, label: '本月收入', frontColor: Colors.income },
-      { value: comparison.compare.income, label: comparison.compareLabel + '收入', frontColor: '#81ECEC' },
-    ];
-  }, [comparison]);
+  const engelLineData = useMemo(() => (engelData ?? []).map((d: any) => ({ value: Number(d.coefficient), label: d.month.slice(5) })), [engelData]);
 
   return (
     <ScrollView style={styles.container}>
-      {/* ═══ 顶部筛选区 ═══ */}
+      {/* ═══ 筛选 ═══ */}
       <View style={styles.header}>
-        {/* 第一行: 账本选择 (下拉) */}
         <Pressable style={styles.dropdown} onPress={() => setBookPickerVisible(true)}>
-          <MaterialCommunityIcons name="book-open-variant" size={18} color={Colors.primary} />
-          <Text style={styles.dropdownText} numberOfLines={1}>
-            {showAll ? '全部账本' : selectedBook?.name ?? '选择账本'}
-          </Text>
-          <MaterialCommunityIcons name="chevron-down" size={18} color={Colors.textMuted} />
+          <MaterialCommunityIcons name="book-open-variant" size={16} color={Colors.primary} />
+          <Text style={styles.dropdownText} numberOfLines={1}>{showAll ? '全部账本' : selectedBook?.name ?? '选择'}</Text>
+          <MaterialCommunityIcons name="chevron-down" size={16} color={Colors.textMuted} />
         </Pressable>
-
-        {/* 第二行: 时间筛选 */}
-        <View style={styles.chipRow}>
-          {TIME_FILTERS.map((filter) => (
-            <Chip
-              key={filter}
-              selected={filter === timeFilter}
-              onPress={() => {
-                setTimeFilter(filter);
-                if (filter === '自定义') {
-                  setDatePickerTarget('start');
-                }
-              }}
-              style={styles.chip}
-              showSelectedOverlay
-              compact
-            >
-              {filter}
-            </Chip>
-          ))}
-        </View>
+        <SegmentedButtons value={timePeriod}
+          onValueChange={(v) => { setTimePeriod(v); setTimeIndex(getTimelineOptions(v).length - 1); setTimeout(scrollTimelineToEnd, 150); }}
+          buttons={[{ value: 'week', label: '周' }, { value: 'month', label: '月' }, { value: 'year', label: '年' }, { value: 'custom', label: '自定义' }]}
+          style={styles.periodSegments} />
+        {timePeriod !== 'custom' ? (
+          <ScrollView ref={timelineRef} horizontal showsHorizontalScrollIndicator={false} style={styles.timeline} onContentSizeChange={scrollTimelineToEnd}>
+            {timelineOptions.map((opt, idx) => (
+              <Chip key={opt.label} selected={idx === timeIndex} onPress={() => setTimeIndex(idx)} style={styles.timelineChip} compact>{opt.label}</Chip>
+            ))}
+          </ScrollView>
+        ) : (
+          <View style={styles.customRange}>
+            <Button mode="outlined" onPress={() => setDatePickerTarget('start')} compact style={{ flex: 1 }}>{rangeStart}</Button>
+            <Text style={{ color: Colors.textMuted, marginHorizontal: 4 }}>~</Text>
+            <Button mode="outlined" onPress={() => setDatePickerTarget('end')} compact style={{ flex: 1 }}>{rangeEnd}</Button>
+          </View>
+        )}
       </View>
 
-      {/* ═══ 月度汇总 ═══ */}
+      {/* ═══ 月度概览 ═══ */}
       <Card style={styles.card} mode="elevated">
-        <Card.Content>
-          <Text variant="titleMedium" style={styles.cardTitle}>
-            {showAll ? '全部账本 · ' : ''}月度概览
-          </Text>
-          {singleLoading || allLoading ? (
-            <View style={styles.loadingWrap}><ActivityIndicator color={Colors.primary} /></View>
-          ) : displaySum ? (
+        <Card.Content style={{ paddingVertical: Spacing.sm }}>
+          <Text variant="titleMedium" style={styles.cardTitle}>{showAll ? '全部 · ' : ''}概览</Text>
+          {displaySum ? (
             <View style={styles.summaryRow}>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>支出</Text>
-                <Text style={[styles.summaryAmount, { color: Colors.expense }]}>
-                  {formatCurrency(displaySum.totalExpense)}
-                </Text>
-              </View>
+              <View style={styles.summaryItem}><Text style={styles.summaryLabel}>支出</Text>
+                <Text style={[styles.summaryAmount, { color: Colors.expense }]}>{formatCurrency(displaySum.totalExpense)}</Text></View>
               <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>收入</Text>
-                <Text style={[styles.summaryAmount, { color: Colors.income }]}>
-                  {formatCurrency(displaySum.totalIncome)}
-                </Text>
-              </View>
+              <View style={styles.summaryItem}><Text style={styles.summaryLabel}>收入</Text>
+                <Text style={[styles.summaryAmount, { color: Colors.income }]}>{formatCurrency(displaySum.totalIncome)}</Text></View>
               <View style={styles.summaryDivider} />
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>结余</Text>
-                <Text style={[styles.summaryAmount, { color: Colors.text }]}>
-                  {formatCurrency(displaySum.balance)}
-                </Text>
-              </View>
+              <View style={styles.summaryItem}><Text style={styles.summaryLabel}>结余</Text>
+                <Text style={[styles.summaryAmount, { color: Colors.text }]}>{formatCurrency(displaySum.balance)}</Text></View>
             </View>
-          ) : (
-            <View style={styles.chartPlaceholder}><Text style={styles.placeholderText}>暂无数据</Text></View>
-          )}
+          ) : <View style={styles.empty}><Text style={styles.emptyText}>暂无数据</Text></View>}
         </Card.Content>
       </Card>
 
-      {/* ═══ 恩格尔系数 ═══ */}
+      {/* ═══ 恩格尔 ═══ */}
       <Card style={[styles.card, { backgroundColor: '#FFF5F5' }]} mode="elevated">
-        <Card.Content>
+        <Card.Content style={{ paddingVertical: Spacing.sm }}>
           <View style={styles.engelRow}>
-            <View style={styles.engelLeft}>
-              <View style={styles.cardHeaderRow}>
-                <MaterialCommunityIcons name="food-fork-drink" size={18} color="#FF6B6B" />
-                <Text style={styles.cardTitle}>恩格尔系数</Text>
-              </View>
-              {displaySum && (
-                <>
-                  <Text style={styles.engelLabel}>
-                    {'⭐'.repeat(displaySum.engelLevel.stars)} {displaySum.engelLevel.label}
-                  </Text>
-                  <Text style={styles.engelDesc}>{displaySum.engelLevel.description}</Text>
-                </>
-              )}
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><MaterialCommunityIcons name="food-fork-drink" size={16} color="#FF6B6B" /><Text style={styles.cardTitle}>恩格尔</Text></View>
+              {displaySum && <Text style={styles.engelSub}>{'⭐'.repeat(displaySum.engelLevel.stars)} {displaySum.engelLevel.label}</Text>}
             </View>
-            {displaySum ? (
-              <Text style={styles.engelValue}>{displaySum.engelCoefficient}%</Text>
-            ) : (
-              <Text style={styles.engelValue}>--</Text>
-            )}
+            <Text style={styles.engelValue}>{displaySum?.engelCoefficient ?? '--'}%</Text>
           </View>
           {engelLineData.length > 0 && (
-            <View style={{ marginTop: Spacing.sm, height: 80 }}>
-              <LineChart
-                data={engelLineData} height={70} color="#FF6B6B" thickness={2} hideDataPoints
-                startFillColor="#FF6B6B20" endFillColor="#FF6B6B02" startOpacity={0.3} endOpacity={0}
-                noOfSections={2}
-                yAxisTextStyle={{ color: Colors.textMuted, fontSize: 9 }}
-                xAxisLabelTextStyle={{ color: Colors.textMuted, fontSize: 9 }}
-                hideRules
-              />
+            <View style={{ height: 50, marginTop: 4 }}>
+              <LineChart data={engelLineData} height={45} color="#FF6B6B" thickness={2} hideDataPoints startFillColor="#FF6B6B15" endFillColor="#FF6B6B00" startOpacity={0.2} endOpacity={0} noOfSections={2} yAxisTextStyle={{ color: Colors.textMuted, fontSize: 8 }} xAxisLabelTextStyle={{ color: Colors.textMuted, fontSize: 8 }} hideRules />
             </View>
-          )}
-        </Card.Content>
-      </Card>
-
-      {/* ═══ 支出分类占比 (支持下钻) ═══ */}
-      <Card style={styles.card} mode="elevated">
-        <Card.Content>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm }}>
-            {drillCategory && (
-              <Button mode="text" icon="arrow-left" onPress={() => setDrillCategory(null)} compact>{drillCategory.name}</Button>
-            )}
-            <Text variant="titleMedium" style={[styles.cardTitle, { marginBottom: 0 }]}>
-              {drillCategory ? '二级分类' : '支出分类占比'}
-            </Text>
-          </View>
-          {!drillCategory ? (
-            pieData.length > 0 ? (
-              <View style={styles.chartWrap}>
-                <PieChart
-                  data={pieData} donut radius={100} innerRadius={55}
-                  centerLabelComponent={() => (
-                    <Text style={{ textAlign: 'center', fontWeight: '700', fontSize: FontSize.sm, color: Colors.text }}>
-                      {formatCurrency(displaySum?.totalExpense ?? 0)}
-                    </Text>
-                  )}
-                  onPress={(item: any, index: number) => {
-                    const cat = (displayCategoryData ?? [])[index];
-                    if (cat) setDrillCategory({ id: (cat as any).id, name: cat.name });
-                  }}
-                />
-                <View style={styles.legendRow}>
-                  {pieData.map((d: any, idx: number) => (
-                    <Pressable key={d.text} style={styles.legendItem} onPress={() => {
-                      const cat = (displayCategoryData ?? [])[idx];
-                      if (cat) setDrillCategory({ id: (cat as any).id, name: cat.name });
-                    }}>
-                      <View style={[styles.legendDot, { backgroundColor: d.color }]} />
-                      <Text style={styles.legendText} numberOfLines={1}>{d.text}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            ) : (
-              <View style={styles.chartPlaceholder}><Text style={styles.placeholderText}>暂无支出数据</Text></View>
-            )
-          ) : (
-            subPieData.length > 0 ? (
-              <View style={styles.chartWrap}>
-                <PieChart
-                  data={subPieData} donut radius={100} innerRadius={55}
-                  centerLabelComponent={() => (
-                    <Text style={{ textAlign: 'center', fontWeight: '600', fontSize: FontSize.xs, color: Colors.text }}>
-                      {drillCategory.name}
-                    </Text>
-                  )}
-                />
-                <View style={styles.legendRow}>
-                  {subPieData.map((d: any) => (
-                    <View key={d.text} style={styles.legendItem}>
-                      <View style={[styles.legendDot, { backgroundColor: d.color }]} />
-                      <Text style={styles.legendText} numberOfLines={1}>{d.text}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            ) : (
-              <View style={styles.chartPlaceholder}><Text style={styles.placeholderText}>该分类下暂无数据</Text></View>
-            )
           )}
         </Card.Content>
       </Card>
 
       {/* ═══ 支出趋势 ═══ */}
       <Card style={styles.card} mode="elevated">
-        <Card.Content>
-          <Text variant="titleMedium" style={styles.cardTitle}>
-            近{trendData?.length ?? 6}月支出趋势
-          </Text>
+        <Card.Content style={{ paddingVertical: Spacing.sm }}>
+          <Text variant="titleMedium" style={styles.cardTitle}>支出趋势</Text>
           {lineData.length > 0 ? (
-            <View style={styles.chartWrap}>
-              <LineChart
-                data={lineData} height={180} color={Colors.expense} dataPointsColor={Colors.expense}
-                thickness={2} startFillColor={Colors.expense + '20'} endFillColor={Colors.expense + '02'}
-                startOpacity={0.4} endOpacity={0.1} noOfSections={4}
+            <LineChart data={lineData} height={100} color={Colors.expense} dataPointsColor={Colors.expense}
+                yAxisOffset={0} spacing={trendSpacing} initialSpacing={8} endSpacing={8}
+                isAnimated={false}
+                thickness={2} startFillColor={Colors.expense + '15'} endFillColor={Colors.expense + '00'}
+                startOpacity={0.3} endOpacity={0} noOfSections={3}
                 yAxisTextStyle={{ color: Colors.textMuted, fontSize: 10 }}
                 xAxisLabelTextStyle={{ color: Colors.textMuted, fontSize: 10 }}
                 hideRules
               />
-            </View>
-          ) : (
-            <View style={styles.chartPlaceholder}><Text style={styles.placeholderText}>暂无趋势数据</Text></View>
-          )}
+          ) : <View style={styles.empty}><Text style={styles.emptyText}>暂无数据</Text></View>}
         </Card.Content>
       </Card>
 
-      {/* ═══ 同比环比 ═══ */}
+      {/* ═══ 分类占比 — 行列表 ═══ */}
       <Card style={styles.card} mode="elevated">
-        <Card.Content>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm }}>
-            <Text variant="titleMedium" style={[styles.cardTitle, { marginBottom: 0 }]}>收支对比</Text>
-            <View style={{ flexDirection: 'row', gap: 4 }}>
-              <Chip selected={compareMode === 'mom'} onPress={() => setCompareMode('mom')} compact style={{ borderRadius: 20 }}>环比</Chip>
-              <Chip selected={compareMode === 'yoy'} onPress={() => setCompareMode('yoy')} compact style={{ borderRadius: 20 }}>同比</Chip>
-            </View>
-          </View>
-          {barData.length > 0 ? (
-            <View style={styles.chartWrap}>
-              <BarChart
-                data={barData}
-                height={180}
-                barWidth={38}
-                spacing={20}
-                noOfSections={4}
-                yAxisTextStyle={{ color: Colors.textMuted, fontSize: 10 }}
-                xAxisLabelTextStyle={{ color: Colors.textMuted, fontSize: 10 }}
-                hideRules
-              />
-            </View>
-          ) : (
-            <View style={styles.chartPlaceholder}><Text style={styles.placeholderText}>暂无对比数据</Text></View>
-          )}
+        <Card.Content style={{ paddingVertical: Spacing.sm }}>
+          <Text variant="titleMedium" style={styles.cardTitle}>分类占比</Text>
+          {(displayCategoryData ?? []).map((cat: any) => {
+            const pct = totalExpense > 0 ? Math.round((Number(cat.total) / totalExpense) * 100) : 0;
+            const prevTotal = prevMap.get(cat.name) ?? 0;
+            const delta = prevTotal > 0 ? Math.round(((Number(cat.total) - prevTotal) / prevTotal) * 100) : 0;
+            const color = getCategoryColor(cat.icon);
+            return (
+              <View key={cat.name} style={styles.catRow}>
+                <View style={[styles.catIcon, { backgroundColor: color + '18' }]}>
+                  <MaterialCommunityIcons name={mapIcon(cat.icon)} size={18} color={color} />
+                </View>
+                <View style={styles.catInfo}>
+                  <View style={styles.catTop}>
+                    <Text style={styles.catName}>{cat.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      {delta !== 0 && prevTotal > 0 && (
+                        <MaterialCommunityIcons name={delta > 0 ? 'arrow-up' : 'arrow-down'} size={12} color={delta > 0 ? Colors.expense : Colors.income} />
+                      )}
+                      <Text style={[styles.catPct, { color }]}>{pct}%</Text>
+                    </View>
+                  </View>
+                  <View style={styles.progressBg}>
+                    <View style={[styles.progressFill, { backgroundColor: color, width: `${Math.max(pct, 2)}%` }]} />
+                  </View>
+                </View>
+                <Text style={styles.catAmount}>{formatCurrency(Number(cat.total))}</Text>
+              </View>
+            );
+          })}
+          {(!displayCategoryData || displayCategoryData.length === 0) && <View style={styles.empty}><Text style={styles.emptyText}>暂无数据</Text></View>}
         </Card.Content>
       </Card>
 
-      <View style={styles.bottomSpacer} />
+      <View style={{ height: 60 }} />
 
-      {/* ═══ 账本选择弹窗 ═══ */}
+      {/* ═══ 弹窗 ═══ */}
       <Portal>
         <Dialog visible={bookPickerVisible} onDismiss={() => setBookPickerVisible(false)}>
           <Dialog.Title>选择账本</Dialog.Title>
           <Dialog.Content style={{ paddingHorizontal: 0 }}>
-            <List.Item
-              title="全部账本"
-              left={(props: any) => <List.Icon {...props} icon="chart-pie" />}
+            <List.Item title="全部账本" left={(props: any) => <List.Icon {...props} icon="chart-pie" />}
               onPress={() => { setBookFilter('__all__'); setBookPickerVisible(false); }}
-              style={bookFilter === '__all__' && { backgroundColor: Colors.primary + '12' }}
-            />
+              style={bookFilter === '__all__' && { backgroundColor: Colors.primary + '12' }} />
             {(books ?? []).map((b: Book) => (
-              <List.Item
-                key={b.id}
-                title={b.name}
-                description={b.type === 'personal' ? '个人账本' : '共享账本'}
-                left={(props: any) => (
-                  <List.Icon {...props} icon={b.type === 'personal' ? 'notebook' : 'account-group'} />
-                )}
+              <List.Item key={b.id} title={b.name} description={b.type === 'personal' ? '个人' : '共享'}
+                left={(props: any) => <List.Icon {...props} icon={b.type === 'personal' ? 'notebook' : 'account-group'} />}
                 onPress={() => { setBookFilter(b.id); setActiveBook(b); setBookPickerVisible(false); }}
-                style={b.id === bookFilter && { backgroundColor: Colors.primary + '12' }}
-              />
+                style={b.id === bookFilter && { backgroundColor: Colors.primary + '12' }} />
             ))}
           </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setBookPickerVisible(false)}>取消</Button>
-          </Dialog.Actions>
+          <Dialog.Actions><Button onPress={() => setBookPickerVisible(false)}>取消</Button></Dialog.Actions>
         </Dialog>
       </Portal>
-
-      {/* ═══ 日期选择器 ═══ */}
-      <DatePickerModal
-        visible={datePickerTarget !== null}
-        date={datePickerTarget === 'start' ? (customStart ?? currentMonth + '-01') : (customEnd ?? currentMonth + '-28')}
-        onSelect={(d) => {
-          if (datePickerTarget === 'start') {
-            setCustomStart(d);
-            setDatePickerTarget('end');
-          } else {
-            setCustomEnd(d);
-            setDatePickerTarget(null);
-          }
-        }}
-        onClose={() => setDatePickerTarget(null)}
-      />
+      <DatePickerModal visible={datePickerTarget !== null}
+        date={datePickerTarget === 'start' ? (customStart ?? dayjs().format('YYYY-MM-01')) : (customEnd ?? dayjs().format('YYYY-MM-28'))}
+        onSelect={(d) => { if (datePickerTarget === 'start') { setCustomStart(d); setDatePickerTarget('end'); } else { setCustomEnd(d); setDatePickerTarget(null); } }}
+        onClose={() => setDatePickerTarget(null)} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xxl, paddingBottom: Spacing.md },
-  // 下拉
-  dropdown: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-    backgroundColor: Colors.surface, borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm + 2,
-    borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.sm,
-  },
-  dropdownText: { flex: 1, fontSize: FontSize.md, fontWeight: '600', color: Colors.primary },
-  // 时间
-  chipRow: { flexDirection: 'row', gap: Spacing.xs, flexWrap: 'wrap' },
-  chip: { borderRadius: 20 },
-  // 汇总
-  card: { marginHorizontal: Spacing.md, marginBottom: Spacing.md, borderRadius: BorderRadius.lg },
-  cardTitle: { fontWeight: '600', marginBottom: Spacing.md, marginLeft: Spacing.xs },
-  cardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.md },
-  summaryRow: { flexDirection: 'row', alignItems: 'center' },
+  header: { paddingHorizontal: Spacing.sm, paddingTop: Spacing.md, paddingBottom: Spacing.xs },
+  dropdown: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.surface, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.sm, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
+  dropdownText: { flex: 1, fontSize: 13, fontWeight: '600', color: Colors.primary },
+  periodSegments: { marginBottom: 6 },
+  timeline: { marginBottom: 2 },
+  timelineChip: { marginRight: 6, borderRadius: 20 },
+  customRange: { flexDirection: 'row', alignItems: 'center' },
+  // 卡
+  card: { marginHorizontal: Spacing.sm, marginBottom: 6, borderRadius: BorderRadius.lg },
+  cardTitle: { fontWeight: '600', fontSize: 14, marginBottom: 0 },
+  engelSub: { fontSize: 11, color: Colors.textSecondary, marginTop: 2 },
+  // 概览
+  summaryRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   summaryItem: { flex: 1, alignItems: 'center' },
-  summaryDivider: { width: 1, height: 28, backgroundColor: Colors.divider },
-  summaryLabel: { fontSize: FontSize.xs, color: Colors.textMuted, marginBottom: 4 },
-  summaryAmount: { fontSize: FontSize.lg, fontWeight: '700' },
+  summaryDivider: { width: 1, height: 20, backgroundColor: Colors.divider },
+  summaryLabel: { fontSize: 10, color: Colors.textMuted },
+  summaryAmount: { fontSize: 15, fontWeight: '700' },
   // 恩格尔
   engelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  engelLeft: { flex: 1 },
-  engelLabel: { fontSize: FontSize.sm, color: Colors.textSecondary, marginLeft: 28 },
-  engelDesc: { fontSize: FontSize.xs, color: Colors.textMuted, marginLeft: 28, marginTop: 2 },
-  engelValue: { fontSize: 40, fontWeight: '800', color: '#FF6B6B' },
-  // 图表
-  chartWrap: { alignItems: 'center', paddingVertical: Spacing.sm },
-  legendRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Spacing.md, marginTop: Spacing.sm },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: FontSize.xs, color: Colors.textSecondary, maxWidth: 72 },
-  chartPlaceholder: { height: 120, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.background, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: Colors.border },
-  placeholderText: { fontSize: FontSize.md, color: Colors.textMuted, marginTop: Spacing.sm },
-  loadingWrap: { height: 60, alignItems: 'center', justifyContent: 'center' },
-  bottomSpacer: { height: Spacing.xxl },
+  engelValue: { fontSize: 28, fontWeight: '800', color: '#FF6B6B' },
+  // 分类占比行
+  catRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: 8 },
+  catIcon: { width: 34, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  catInfo: { flex: 1 },
+  catTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
+  catName: { fontSize: 12, fontWeight: '500', color: Colors.text },
+  catPct: { fontSize: 12, fontWeight: '700' },
+  progressBg: { height: 4, borderRadius: 2, backgroundColor: Colors.divider },
+  progressFill: { height: 4, borderRadius: 2 },
+  catAmount: { fontSize: 12, fontWeight: '600', color: Colors.text, width: 64, textAlign: 'right' },
+  // 占位
+  empty: { height: 40, alignItems: 'center', justifyContent: 'center' },
+  emptyText: { fontSize: 12, color: Colors.textMuted },
 });

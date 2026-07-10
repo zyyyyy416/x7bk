@@ -1,39 +1,48 @@
 import { useQuery } from '@tanstack/react-query';
-import { getMonthlySummary, getAllBooksSummary, getCategoryBreakdown, getAllBooksCategoryBreakdown, getSubCategoryBreakdown, getMonthlyTrend, getEngelTrend, getComparison } from '@/services/analysis.service';
+import { getMonthlySummary, getAllBooksSummary, getCategoryBreakdown, getAllBooksCategoryBreakdown, getSubCategoryBreakdown, getMonthlyTrend, getEngelTrend, getComparison, getDailyTrend, getYearlyTrend } from '@/services/analysis.service';
 
 /** 获取月度分析概览 */
-export function useMonthlySummary(bookId: string, month: string) {
+export function useMonthlySummary(bookId: string, startDate: string, endDate: string) {
   return useQuery({
-    queryKey: ['monthlySummary', bookId, month],
-    queryFn: () => getMonthlySummary(bookId, month),
-    enabled: !!bookId && !!month,
+    queryKey: ['monthlySummary', bookId, startDate, endDate],
+    queryFn: () => getMonthlySummary(bookId, startDate, endDate),
+    enabled: !!bookId && !!startDate && !!endDate,
   });
 }
 
 /** 获取全部账本月度汇总 */
-export function useAllBooksSummary(bookIds: string[], month: string) {
+export function useAllBooksSummary(bookIds: string[], startDate: string, endDate: string) {
   return useQuery({
-    queryKey: ['allBooksSummary', bookIds, month],
-    queryFn: () => getAllBooksSummary(bookIds, month),
-    enabled: bookIds.length > 0 && !!month,
+    queryKey: ['allBooksSummary', bookIds, startDate, endDate],
+    queryFn: () => getAllBooksSummary(bookIds, startDate, endDate),
+    enabled: bookIds.length > 0 && !!startDate && !!endDate,
   });
 }
 
 /** 获取分类支出分布 */
-export function useCategoryBreakdown(bookId: string, month: string) {
+export function useCategoryBreakdown(bookId: string, startDate: string, endDate: string) {
   return useQuery({
-    queryKey: ['categoryBreakdown', bookId, month],
-    queryFn: () => getCategoryBreakdown(bookId, month),
-    enabled: !!bookId && !!month,
+    queryKey: ['categoryBreakdown', bookId, startDate, endDate],
+    queryFn: () => getCategoryBreakdown(bookId, startDate, endDate),
+    enabled: !!bookId && !!startDate && !!endDate,
   });
 }
 
 /** 获取全部账本分类支出分布 */
-export function useAllBooksCategoryBreakdown(bookIds: string[], month: string) {
+export function useAllBooksCategoryBreakdown(bookIds: string[], startDate: string, endDate: string) {
   return useQuery({
-    queryKey: ['allBooksCategoryBreakdown', bookIds, month],
-    queryFn: () => getAllBooksCategoryBreakdown(bookIds, month),
-    enabled: bookIds.length > 0 && !!month,
+    queryKey: ['allBooksCategoryBreakdown', bookIds, startDate, endDate],
+    queryFn: () => getAllBooksCategoryBreakdown(bookIds, startDate, endDate),
+    enabled: bookIds.length > 0 && !!startDate && !!endDate,
+  });
+}
+
+/** 二级分类分布 (下钻) */
+export function useSubCategoryBreakdown(bookId: string, startDate: string, endDate: string, parentId: string) {
+  return useQuery({
+    queryKey: ['subCategoryBreakdown', bookId, startDate, endDate, parentId],
+    queryFn: () => getSubCategoryBreakdown(bookId, startDate, endDate, parentId),
+    enabled: !!bookId && !!startDate && !!endDate && !!parentId,
   });
 }
 
@@ -55,20 +64,19 @@ export function useEngelTrend(bookId: string, months?: number) {
   });
 }
 
-/** 获取二级分类分布 (下钻) */
-export function useSubCategoryBreakdown(bookId: string, month: string, parentId: string) {
+export function useDailyTrend(bookId: string, startDate: string, endDate: string) {
   return useQuery({
-    queryKey: ['subCategoryBreakdown', bookId, month, parentId],
-    queryFn: () => getSubCategoryBreakdown(bookId, month, parentId),
-    enabled: !!bookId && !!month && !!parentId,
+    queryKey: ['dailyTrend', bookId, startDate, endDate],
+    queryFn: () => getDailyTrend(bookId, startDate, endDate),
+    enabled: !!bookId && !!startDate && !!endDate,
   });
 }
 
-/** 同比/环比对比 */
-export function useComparison(bookId: string, month: string, mode: 'mom' | 'yoy') {
+export function useYearlyTrend(bookId: string, year: number) {
   return useQuery({
-    queryKey: ['comparison', bookId, month, mode],
-    queryFn: () => getComparison(bookId, month, mode),
-    enabled: !!bookId && !!month,
+    queryKey: ['yearlyTrend', bookId, year],
+    queryFn: () => getYearlyTrend(bookId, year),
+    enabled: !!bookId && !!year,
   });
 }
+

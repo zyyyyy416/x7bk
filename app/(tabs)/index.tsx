@@ -7,7 +7,7 @@ import { Colors, Spacing, FontSize, BorderRadius } from '@/theme';
 import { formatCurrency, formatAmount } from '@/utils/currency';
 import { formatDate, formatRelativeTime, getCurrentMonth } from '@/utils/date';
 import { calcEngelFromBills } from '@/utils/engel';
-import { CATEGORY_ICON_MAP } from '@/constants/categories';
+import { mapIcon, getCategoryColor } from '@/components/ui/CategoryItem';
 import { getEngelLevel } from '@/constants/engelLevels';
 import { useBills } from '@/hooks/useBills';
 import { useBooks } from '@/hooks/useBooks';
@@ -32,22 +32,22 @@ function getGreeting(): { text: string; emoji: string } {
 // ─── 单条账单行 ────────────────────────────────────────
 function BillRow({ bill }: { bill: BillWithDetails }) {
   const iconKey = bill.category?.icon ?? 'help-circle';
-  const iconName = (CATEGORY_ICON_MAP[iconKey] ?? 'help-circle') as keyof typeof MaterialCommunityIcons.glyphMap;
+  const iconName = mapIcon(iconKey);
+  const catColor = getCategoryColor(iconKey);
   const isExpense = bill.type === 'expense';
   const amount = Number(bill.amount);
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.billRow, pressed && styles.billRowPressed]}
+      style={({ pressed }) => [
+        styles.billRow,
+        { backgroundColor: catColor + '10' },
+        pressed && styles.billRowPressed,
+      ]}
       onPress={() => router.push(`/bill/${bill.id}` as any)}
     >
-      {/* 左侧图标 */}
-      <View style={[styles.billIconWrap, { backgroundColor: (isExpense ? Colors.expense : Colors.income) + '15' }]}>
-        <MaterialCommunityIcons
-          name={iconName}
-          size={20}
-          color={isExpense ? Colors.expense : Colors.income}
-        />
+      <View style={[styles.billIconWrap, { backgroundColor: catColor + '22' }]}>
+        <MaterialCommunityIcons name={iconName} size={20} color={catColor} />
       </View>
 
       {/* 中间信息 */}
@@ -116,8 +116,11 @@ export default function HomeScreen() {
   const bills = billsData?.bills ?? [];
 
   // 获取月度分析 (全部时汇总所有账本)
-  const { data: singleSummary } = useMonthlySummary(queryBookId, currentMonth);
-  const { data: allSummary } = useAllBooksSummary(bookIds, currentMonth);
+  const monthStart = currentMonth + '-01';
+  const [y, m] = currentMonth.split('-').map(Number);
+  const monthEnd = currentMonth + '-' + String(new Date(y!, m!, 0).getDate()).padStart(2, '0');
+  const { data: singleSummary } = useMonthlySummary(queryBookId, monthStart, monthEnd);
+  const { data: allSummary } = useAllBooksSummary(bookIds, monthStart, monthEnd);
   const monthlySummary = showAllHome ? allSummary : singleSummary;
 
   // 从真实账单计算恩格尔系数

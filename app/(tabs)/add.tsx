@@ -192,6 +192,8 @@ export default function AddBillScreen() {
       queryClient.invalidateQueries({ queryKey: ['categoryBreakdown'] });
       queryClient.invalidateQueries({ queryKey: ['monthlyTrend'] });
       queryClient.invalidateQueries({ queryKey: ['engelTrend'] });
+      queryClient.invalidateQueries({ queryKey: ['dailyTrend'] });
+      queryClient.invalidateQueries({ queryKey: ['yearlyTrend'] });
 
       setSnackbar(`已记录 ${formatCurrency(evaluated)}`);
       // 重置

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Book } from '@/types';
-import { getMyBooks, createBook, getBookMembers, removeMember, leaveBook, joinBookByCode } from '@/services/book.service';
+import { getMyBooks, createBook, getBookMembers, removeMember, leaveBook, joinBookByCode, deleteBook } from '@/services/book.service';
 import { useAuthStore } from '@/stores/authStore';
 
 /** 获取我的所有账本 */
@@ -75,6 +75,18 @@ export function useLeaveBook() {
   const userId = useAuthStore((s) => s.user?.id);
   return useMutation({
     mutationFn: (bookId: string) => leaveBook(bookId, userId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['books'] });
+    },
+  });
+}
+
+/** 删除账本 */
+export function useDeleteBook() {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((s) => s.user?.id);
+  return useMutation({
+    mutationFn: (bookId: string) => deleteBook(bookId, userId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['books'] });
     },

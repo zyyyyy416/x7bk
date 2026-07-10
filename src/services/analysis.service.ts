@@ -1,69 +1,54 @@
 import { getSupabase } from './supabase';
 import type { MonthlySummary } from '@/types';
+import dayjs from 'dayjs';
 import { getEngelLevel } from '@/constants/engelLevels';
 import { calcEngelCoefficient } from '@/utils/engel';
 
-export async function getMonthlySummary(bookId: string, month: string) {
+export async function getMonthlySummary(bookId: string, startDate: string, endDate: string) {
   const s = await getSupabase();
   if (!s) return null;
 
-  const [y, m] = month.split('-').map(Number);
-  const endDay = new Date(y!, m!, 0).getDate();
-  const start = `${month}-01`;
-  const end = `${month}-${String(endDay).padStart(2, '0')}`;
-
   const [{ data: inc }, { data: exp }, { data: food }] = await Promise.all([
-    s.from('bills').select('amount').eq('book_id', bookId).eq('type', 'income').gte('bill_date', start).lte('bill_date', end),
-    s.from('bills').select('amount').eq('book_id', bookId).eq('type', 'expense').gte('bill_date', start).lte('bill_date', end),
-    s.from('bills').select('amount, categories!inner(engel_eligible)').eq('book_id', bookId).eq('type', 'expense').eq('categories.engel_eligible', true).gte('bill_date', start).lte('bill_date', end),
+    s.from('bills').select('amount').eq('book_id', bookId).eq('type', 'income').gte('bill_date', startDate).lte('bill_date', endDate),
+    s.from('bills').select('amount').eq('book_id', bookId).eq('type', 'expense').gte('bill_date', startDate).lte('bill_date', endDate),
+    s.from('bills').select('amount, categories!inner(engel_eligible)').eq('book_id', bookId).eq('type', 'expense').eq('categories.engel_eligible', true).gte('bill_date', startDate).lte('bill_date', endDate),
   ]);
 
   return calcSummary(inc ?? [], exp ?? [], food ?? []);
 }
 
-/** 获取全部账本月度汇总 */
-export async function getAllBooksSummary(bookIds: string[], month: string) {
+export async function getAllBooksSummary(bookIds: string[], startDate: string, endDate: string) {
   const s = await getSupabase();
   if (!s || bookIds.length === 0) return null;
 
-  const [y, m] = month.split('-').map(Number);
-  const endDay = new Date(y!, m!, 0).getDate();
-  const start = `${month}-01`;
-  const end = `${month}-${String(endDay).padStart(2, '0')}`;
-
   const [{ data: inc }, { data: exp }, { data: food }] = await Promise.all([
-    s.from('bills').select('amount').in('book_id', bookIds).eq('type', 'income').gte('bill_date', start).lte('bill_date', end),
-    s.from('bills').select('amount').in('book_id', bookIds).eq('type', 'expense').gte('bill_date', start).lte('bill_date', end),
-    s.from('bills').select('amount, categories!inner(engel_eligible)').in('book_id', bookIds).eq('type', 'expense').eq('categories.engel_eligible', true).gte('bill_date', start).lte('bill_date', end),
+    s.from('bills').select('amount').in('book_id', bookIds).eq('type', 'income').gte('bill_date', startDate).lte('bill_date', endDate),
+    s.from('bills').select('amount').in('book_id', bookIds).eq('type', 'expense').gte('bill_date', startDate).lte('bill_date', endDate),
+    s.from('bills').select('amount, categories!inner(engel_eligible)').in('book_id', bookIds).eq('type', 'expense').eq('categories.engel_eligible', true).gte('bill_date', startDate).lte('bill_date', endDate),
   ]);
 
   return calcSummary(inc ?? [], exp ?? [], food ?? []);
 }
 
-/** 按月分类支出统计 */
-export async function getCategoryBreakdown(bookId: string, month: string) {
-  return _getCategoryBreakdown([bookId], month);
+export async function getCategoryBreakdown(bookId: string, startDate: string, endDate: string) {
+  return _getCategoryBreakdown([bookId], startDate, endDate);
 }
 
-/** 多账本分类支出统计 */
-export async function getAllBooksCategoryBreakdown(bookIds: string[], month: string) {
-  return _getCategoryBreakdown(bookIds, month);
+export async function getAllBooksCategoryBreakdown(bookIds: string[], startDate: string, endDate: string) {
+  return _getCategoryBreakdown(bookIds, startDate, endDate);
 }
 
-async function _getCategoryBreakdown(bookIds: string[], month: string) {
+async function _getCategoryBreakdown(bookIds: string[], startDate: string, endDate: string) {
   const s = await getSupabase();
   if (!s || bookIds.length === 0) return [];
-
-  const [y, m] = month.split('-').map(Number);
-  const endDay = new Date(y!, m!, 0).getDate();
 
   // 查账单 + 其二级分类信息 (含 parent_id)
   const { data } = await s.from('bills')
     .select('amount, category:categories!inner(id, name, icon, parent_id, type)')
     .in('book_id', bookIds)
     .eq('type', 'expense')
-    .gte('bill_date', `${month}-01`)
-    .lte('bill_date', `${month}-${String(endDay).padStart(2, '0')}`);
+    .gte('bill_date', startDate)
+    .lte('bill_date', endDate);
 
   if (!data) return [];
 
@@ -146,11 +131,10 @@ function calcSummary(inc: { amount: number }[], exp: { amount: number }[], food:
 }
 
 /** 二级分类支出分布 (下钻) */
-export async function getSubCategoryBreakdown(bookId: string, month: string, parentCategoryId: string) {
+export async function getSubCategoryBreakdown(bookId: string, startDate: string, endDate: string, parentCategoryId: string) {
   const s = await getSupabase();
   if (!s) return [];
 
-  // 先查出该一级分类下的所有二级分类 ID
   const { data: subCats } = await s.from('categories')
     .select('id, name, icon')
     .eq('parent_id', parentCategoryId);
@@ -159,16 +143,12 @@ export async function getSubCategoryBreakdown(bookId: string, month: string, par
   const subIds = subCats.map((c) => c.id);
   const catMap = new Map(subCats.map((c) => [c.id, { name: c.name, icon: c.icon }]));
 
-  const [y, m] = month.split('-').map(Number);
-  const endDay = new Date(y!, m!, 0).getDate();
-
-  // 查询这些二级分类的账单
   const { data } = await s.from('bills')
     .select('amount, category_id')
     .eq('book_id', bookId).eq('type', 'expense')
     .in('category_id', subIds)
-    .gte('bill_date', `${month}-01`)
-    .lte('bill_date', `${month}-${String(endDay).padStart(2, '0')}`);
+    .gte('bill_date', startDate)
+    .lte('bill_date', endDate);
 
   if (!data) return [];
 
@@ -221,4 +201,47 @@ export async function getComparison(bookId: string, month: string, mode: 'mom' |
     compare: { income: sum(cmp ?? [], 'income'), expense: sum(cmp ?? [], 'expense') },
     compareLabel: mode === 'mom' ? '上月' : '去年同月',
   };
+}
+
+/** 按天统计支出 (周/月视图) — 填充零值覆盖全部日期 */
+export async function getDailyTrend(bookId: string, startDate: string, endDate: string) {
+  const s = await getSupabase();
+  if (!s) return [];
+
+  // 生成日期范围内所有日期
+  const dates: string[] = [];
+  let cur = dayjs(startDate);
+  const end = dayjs(endDate);
+  while (cur.isBefore(end) || cur.isSame(end, 'day')) {
+    dates.push(cur.format('YYYY-MM-DD'));
+    cur = cur.add(1, 'day');
+  }
+
+  const { data } = await s.from('bills')
+    .select('amount, bill_date')
+    .eq('book_id', bookId).eq('type', 'expense')
+    .gte('bill_date', startDate).lte('bill_date', endDate);
+
+  const map = new Map<string, number>();
+  for (const row of (data ?? []) as any[]) {
+    map.set(row.bill_date, (map.get(row.bill_date) ?? 0) + Number(row.amount));
+  }
+  return dates.map((date) => ({ date, expense: map.get(date) ?? 0 }));
+}
+
+/** 按年统计支出 (12个月) — 填充零值 */
+export async function getYearlyTrend(bookId: string, year: number) {
+  const s = await getSupabase();
+  if (!s) return [];
+  const { data } = await s.from('bills')
+    .select('amount, bill_date')
+    .eq('book_id', bookId).eq('type', 'expense')
+    .gte('bill_date', `${year}-01-01`).lte('bill_date', `${year}-12-31`);
+
+  const map = new Map<number, number>();
+  for (const row of (data ?? []) as any[]) {
+    const m = parseInt(row.bill_date.split('-')[1]!, 10);
+    map.set(m, (map.get(m) ?? 0) + Number(row.amount));
+  }
+  return Array.from({ length: 12 }, (_, i) => ({ month: `${i + 1}月`, expense: map.get(i + 1) ?? 0 }));
 }
