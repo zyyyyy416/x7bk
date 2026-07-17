@@ -163,6 +163,39 @@ export async function getSubCategoryBreakdown(bookId: string, startDate: string,
   return Array.from(agg.values()).sort((a, b) => b.total - a.total);
 }
 
+/** 多账本二级分类支出分布 (下钻) */
+export async function getAllBooksSubCategoryBreakdown(bookIds: string[], startDate: string, endDate: string, parentCategoryId: string) {
+  const s = await getSupabase();
+  if (!s || bookIds.length === 0) return [];
+
+  const { data: subCats } = await s.from('categories')
+    .select('id, name, icon')
+    .eq('parent_id', parentCategoryId);
+  if (!subCats?.length) return [];
+
+  const subIds = subCats.map((c) => c.id);
+  const catMap = new Map(subCats.map((c) => [c.id, { name: c.name, icon: c.icon }]));
+
+  const { data } = await s.from('bills')
+    .select('amount, category_id')
+    .in('book_id', bookIds).eq('type', 'expense')
+    .in('category_id', subIds)
+    .gte('bill_date', startDate)
+    .lte('bill_date', endDate);
+
+  if (!data) return [];
+
+  const agg = new Map<string, { name: string; icon: string; total: number }>();
+  for (const row of data as any[]) {
+    const cat = catMap.get(row.category_id);
+    if (!cat) continue;
+    const existing = agg.get(row.category_id);
+    if (existing) { existing.total += Number(row.amount); }
+    else { agg.set(row.category_id, { name: cat.name, icon: cat.icon, total: Number(row.amount) }); }
+  }
+  return Array.from(agg.values()).sort((a, b) => b.total - a.total);
+}
+
 /** 同比/环比对比 */
 export async function getComparison(bookId: string, month: string, mode: 'mom' | 'yoy') {
   const s = await getSupabase();

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getMonthlySummary, getAllBooksSummary, getCategoryBreakdown, getAllBooksCategoryBreakdown, getSubCategoryBreakdown, getMonthlyTrend, getEngelTrend, getComparison, getDailyTrend, getYearlyTrend } from '@/services/analysis.service';
+import { getMonthlySummary, getAllBooksSummary, getCategoryBreakdown, getAllBooksCategoryBreakdown, getSubCategoryBreakdown, getAllBooksSubCategoryBreakdown, getMonthlyTrend, getEngelTrend, getComparison, getDailyTrend, getYearlyTrend } from '@/services/analysis.service';
 
 /** 获取月度分析概览 */
 export function useMonthlySummary(bookId: string, startDate: string, endDate: string) {
@@ -43,6 +43,15 @@ export function useSubCategoryBreakdown(bookId: string, startDate: string, endDa
     queryKey: ['subCategoryBreakdown', bookId, startDate, endDate, parentId],
     queryFn: () => getSubCategoryBreakdown(bookId, startDate, endDate, parentId),
     enabled: !!bookId && !!startDate && !!endDate && !!parentId,
+  });
+}
+
+/** 多账本二级分类分布 (下钻) */
+export function useAllBooksSubCategoryBreakdown(bookIds: string[], startDate: string, endDate: string, parentId: string) {
+  return useQuery({
+    queryKey: ['allBooksSubCategoryBreakdown', bookIds, startDate, endDate, parentId],
+    queryFn: () => getAllBooksSubCategoryBreakdown(bookIds, startDate, endDate, parentId),
+    enabled: bookIds.length > 0 && !!startDate && !!endDate && !!parentId,
   });
 }
 

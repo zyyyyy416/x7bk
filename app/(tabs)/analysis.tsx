@@ -7,7 +7,7 @@ import { Colors, Spacing, FontSize, BorderRadius } from '@/theme';
 import { formatCurrency } from '@/utils/currency';
 import dayjs from 'dayjs';
 import { useBooks } from '@/hooks/useBooks';
-import { useMonthlySummary, useAllBooksSummary, useCategoryBreakdown, useAllBooksCategoryBreakdown, useSubCategoryBreakdown, useEngelTrend, useDailyTrend, useYearlyTrend } from '@/hooks/useAnalysis';
+import { useMonthlySummary, useAllBooksSummary, useCategoryBreakdown, useAllBooksCategoryBreakdown, useSubCategoryBreakdown, useAllBooksSubCategoryBreakdown, useEngelTrend, useDailyTrend, useYearlyTrend } from '@/hooks/useAnalysis';
 import { useUiStore } from '@/stores/uiStore';
 import { mapIcon, getCategoryColor } from '@/components/ui/CategoryItem';
 import DatePickerModal from '@/components/ui/DatePickerModal';
@@ -50,6 +50,7 @@ export default function AnalysisScreen() {
   const [customEnd, setCustomEnd] = useState<string | null>(null);
   const [datePickerTarget, setDatePickerTarget] = useState<'start' | 'end' | null>(null);
   const [chartView, setChartView] = useState<'list' | 'donut'>('list');
+  const [drillParent, setDrillParent] = useState<{ id: string; name: string; icon: string } | null>(null);
   const timelineRef = useRef<ScrollView>(null);
 
   const scrollTimelineToEnd = useCallback(() => {
@@ -80,7 +81,18 @@ export default function AnalysisScreen() {
   const pieData = useMemo(() => (displayCategoryData ?? []).map((c: any, i: number) => ({
     value: Number(c.total), label: c.name.length > 4 ? c.name.slice(0, 4) : c.name,
     color: [Colors.primary, Colors.expense, Colors.warning, Colors.info, '#A29BFE', '#FD79A8', '#00CEC9', '#FDCB6E', '#636E72', '#E17055'][i % 10]!,
+    id: c.id, // 父分类 ID，用于下钻
   })), [displayCategoryData]);
+
+  // 二级分类下钻
+  const { data: subCategoryData, isLoading: subLoading } = useSubCategoryBreakdown(queryBook, rangeStart, rangeEnd, drillParent?.id ?? '');
+  const { data: allSubCategoryData } = useAllBooksSubCategoryBreakdown(bookIds, rangeStart, rangeEnd, drillParent?.id ?? '');
+  const displaySubCategoryData = showAll ? allSubCategoryData : subCategoryData;
+  const subTotalExpense = useMemo(() => (displaySubCategoryData ?? []).reduce((s: number, c: any) => s + Number(c.total), 0), [displaySubCategoryData]);
+  const subPieData = useMemo(() => (displaySubCategoryData ?? []).map((c: any, i: number) => ({
+    value: Number(c.total), label: c.name.length > 4 ? c.name.slice(0, 4) : c.name,
+    color: [Colors.primary, Colors.expense, Colors.warning, Colors.info, '#A29BFE', '#FD79A8', '#00CEC9', '#FDCB6E', '#636E72', '#E17055'][i % 10]!,
+  })), [displaySubCategoryData]);
 
   // 分类占比 (上一时段用于环比)
   const prevStart = dayjs(rangeStart).subtract(1, timePeriod === 'year' ? 'year' : timePeriod === 'week' ? 'week' : 'month').format('YYYY-MM-DD');
@@ -205,63 +217,132 @@ export default function AnalysisScreen() {
         </Card.Content>
       </Card>
 
-      {/* ═══ 分类占比 — 行列表 ═══ */}
+      {/* ═══ 分类占比 ═══ */}
       <Card style={styles.card} mode="elevated">
         <Card.Content style={{ paddingVertical: Spacing.sm }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text variant="titleMedium" style={[styles.cardTitle, { marginBottom: 0 }]}>分类占比</Text>
-            <IconButton icon={chartView === 'list' ? 'chart-donut' : 'view-list'} size={20} onPress={() => setChartView(chartView === 'list' ? 'donut' : 'list')} />
-          </View>
-          {chartView === 'donut' ? (
-            pieData.length > 0 ? (
-              <View style={{ alignItems: 'center', paddingVertical: Spacing.sm }}>
-                <PieChart data={pieData} donut radius={80} innerRadius={45}
-                  centerLabelComponent={() => (<Text style={{ textAlign: 'center', fontWeight: '700', fontSize: 12, color: Colors.text }}>{formatCurrency(totalExpense)}</Text>)}
-                />
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 8 }}>
-                  {pieData.map((d: any) => (
-                    <View key={d.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: d.color }} />
-                      <Text style={{ fontSize: 10, color: Colors.textSecondary }}>{d.label}</Text>
-                    </View>
-                  ))}
+          {drillParent ? (
+            <>
+              {/* 二级分类头部 */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <IconButton icon="arrow-left" size={20} onPress={() => setDrillParent(null)} style={{ margin: 0 }} />
+                  <View style={[styles.catIcon, { backgroundColor: getCategoryColor(drillParent.icon) + '18', marginLeft: 2 }]}>
+                    <MaterialCommunityIcons name={mapIcon(drillParent.icon)} size={16} color={getCategoryColor(drillParent.icon)} />
+                  </View>
+                  <Text variant="titleMedium" style={[styles.cardTitle, { marginBottom: 0, marginLeft: 6 }]}>{drillParent.name}</Text>
                 </View>
+                <IconButton icon={chartView === 'list' ? 'chart-donut' : 'view-list'} size={20} onPress={() => setChartView(chartView === 'list' ? 'donut' : 'list')} />
               </View>
-            ) : <View style={styles.empty}><Text style={styles.emptyText}>暂无数据</Text></View>
-          ) : (
-          (displayCategoryData ?? []).map((cat: any) => {
-            const pct = totalExpense > 0 ? Math.round((Number(cat.total) / totalExpense) * 100) : 0;
-            const prevTotal = prevMap.get(cat.name) ?? 0;
-            const delta = prevTotal > 0 ? Math.round(((Number(cat.total) - prevTotal) / prevTotal) * 100) : 0;
-            const color = getCategoryColor(cat.icon);
-            return (
-              <View key={cat.name} style={styles.catRow}>
-                <View style={[styles.catIcon, { backgroundColor: color + '18' }]}>
-                  <MaterialCommunityIcons name={mapIcon(cat.icon)} size={18} color={color} />
-                </View>
-                <View style={styles.catInfo}>
-                  <View style={styles.catTop}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Text style={styles.catName}>{cat.name}</Text>
-                      {prevTotal > 0 && delta !== 0 && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <MaterialCommunityIcons name={delta > 0 ? 'arrow-up' : 'arrow-down'} size={11} color={delta > 0 ? Colors.expense : Colors.income} />
-                          <Text style={{ fontSize: 10, fontWeight: '600', color: delta > 0 ? Colors.expense : Colors.income }}>{Math.abs(delta)}%</Text>
+              {/* 二级分类内容 */}
+              {subLoading ? (
+                <ActivityIndicator style={{ marginTop: 20 }} />
+              ) : chartView === 'donut' ? (
+                subPieData.length > 0 ? (
+                  <View style={{ alignItems: 'center', paddingVertical: Spacing.sm }}>
+                    <PieChart data={subPieData} donut radius={80} innerRadius={45}
+                      centerLabelComponent={() => (<Text style={{ textAlign: 'center', fontWeight: '700', fontSize: 12, color: Colors.text }}>{formatCurrency(subTotalExpense)}</Text>)}
+                    />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 8 }}>
+                      {subPieData.map((d: any) => (
+                        <View key={d.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: d.color }} />
+                          <Text style={{ fontSize: 10, color: Colors.textSecondary }}>{d.label}</Text>
                         </View>
-                      )}
+                      ))}
                     </View>
-                    <Text style={[styles.catPct, { color }]}>{pct}%</Text>
                   </View>
-                  <View style={styles.progressBg}>
-                    <View style={[styles.progressFill, { backgroundColor: color, width: `${Math.max(pct, 2)}%` }]} />
-                  </View>
-                </View>
-                <Text style={styles.catAmount}>{formatCurrency(Number(cat.total))}</Text>
+                ) : <View style={styles.empty}><Text style={styles.emptyText}>暂无二级分类数据</Text></View>
+              ) : (
+                (displaySubCategoryData ?? []).length > 0 ? (
+                  (displaySubCategoryData ?? []).map((sub: any) => {
+                    const pct = subTotalExpense > 0 ? Math.round((Number(sub.total) / subTotalExpense) * 100) : 0;
+                    const color = getCategoryColor(sub.icon);
+                    return (
+                      <View key={sub.name} style={styles.catRow}>
+                        <View style={[styles.catIcon, { backgroundColor: color + '18' }]}>
+                          <MaterialCommunityIcons name={mapIcon(sub.icon)} size={18} color={color} />
+                        </View>
+                        <View style={styles.catInfo}>
+                          <View style={styles.catTop}>
+                            <Text style={styles.catName}>{sub.name}</Text>
+                            <Text style={[styles.catPct, { color }]}>{pct}%</Text>
+                          </View>
+                          <View style={styles.progressBg}>
+                            <View style={[styles.progressFill, { backgroundColor: color, width: `${Math.max(pct, 2)}%` }]} />
+                          </View>
+                        </View>
+                        <Text style={styles.catAmount}>{formatCurrency(Number(sub.total))}</Text>
+                      </View>
+                    );
+                  })
+                ) : <View style={styles.empty}><Text style={styles.emptyText}>暂无二级分类数据</Text></View>
+              )}
+            </>
+          ) : (
+            <>
+              {/* 一级分类头部 */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text variant="titleMedium" style={[styles.cardTitle, { marginBottom: 0 }]}>分类占比</Text>
+                <IconButton icon={chartView === 'list' ? 'chart-donut' : 'view-list'} size={20} onPress={() => setChartView(chartView === 'list' ? 'donut' : 'list')} />
               </View>
-            );
-          })
+              {/* 一级分类内容 */}
+              {chartView === 'donut' ? (
+                pieData.length > 0 ? (
+                  <View style={{ alignItems: 'center', paddingVertical: Spacing.sm }}>
+                    <PieChart data={pieData} donut radius={80} innerRadius={45}
+                      centerLabelComponent={() => (<Text style={{ textAlign: 'center', fontWeight: '700', fontSize: 12, color: Colors.text }}>{formatCurrency(totalExpense)}</Text>)}
+                      onPress={(item: any, index: number) => {
+                        const cat = (displayCategoryData ?? [])[index];
+                        if (cat) setDrillParent({ id: cat.id, name: cat.name, icon: cat.icon });
+                      }}
+                    />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 8 }}>
+                      {pieData.map((d: any) => (
+                        <View key={d.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: d.color }} />
+                          <Text style={{ fontSize: 10, color: Colors.textSecondary }}>{d.label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ) : <View style={styles.empty}><Text style={styles.emptyText}>暂无数据</Text></View>
+              ) : (
+              (displayCategoryData ?? []).map((cat: any) => {
+                const pct = totalExpense > 0 ? Math.round((Number(cat.total) / totalExpense) * 100) : 0;
+                const prevTotal = prevMap.get(cat.name) ?? 0;
+                const delta = prevTotal > 0 ? Math.round(((Number(cat.total) - prevTotal) / prevTotal) * 100) : 0;
+                const color = getCategoryColor(cat.icon);
+                return (
+                  <Pressable key={cat.name} style={({ pressed }) => [styles.catRow, pressed && { opacity: 0.6 }]} onPress={() => setDrillParent({ id: cat.id, name: cat.name, icon: cat.icon })}>
+                    <View style={[styles.catIcon, { backgroundColor: color + '18' }]}>
+                      <MaterialCommunityIcons name={mapIcon(cat.icon)} size={18} color={color} />
+                    </View>
+                    <View style={styles.catInfo}>
+                      <View style={styles.catTop}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Text style={styles.catName}>{cat.name}</Text>
+                          {prevTotal > 0 && delta !== 0 && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                              <MaterialCommunityIcons name={delta > 0 ? 'arrow-up' : 'arrow-down'} size={11} color={delta > 0 ? Colors.expense : Colors.income} />
+                              <Text style={{ fontSize: 10, fontWeight: '600', color: delta > 0 ? Colors.expense : Colors.income }}>{Math.abs(delta)}%</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[styles.catPct, { color }]}>{pct}%</Text>
+                      </View>
+                      <View style={styles.progressBg}>
+                        <View style={[styles.progressFill, { backgroundColor: color, width: `${Math.max(pct, 2)}%` }]} />
+                      </View>
+                    </View>
+                    <Text style={styles.catAmount}>{formatCurrency(Number(cat.total))}</Text>
+                    <MaterialCommunityIcons name="chevron-right" size={16} color={Colors.textMuted} style={{ marginLeft: 2 }} />
+                  </Pressable>
+                );
+              })
+              )}
+              {chartView === 'list' && (!displayCategoryData || displayCategoryData.length === 0) && <View style={styles.empty}><Text style={styles.emptyText}>暂无数据</Text></View>}
+            </>
           )}
-          {chartView === 'list' && (!displayCategoryData || displayCategoryData.length === 0) && <View style={styles.empty}><Text style={styles.emptyText}>暂无数据</Text></View>}
         </Card.Content>
       </Card>
 
